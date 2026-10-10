@@ -1,4 +1,4 @@
-param([string]$Setup = '', [switch]$KeepInstalled)
+param([string]$Setup = '', [switch]$KeepInstalled, [switch]$SkipAppLaunch)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $version = ([xml](Get-Content "$root/Directory.Build.props" -Raw)).Project.PropertyGroup.Version
@@ -22,8 +22,13 @@ function Assert-Install {
   if ($entry.DisplayVersion -ne $version -or $entry.Publisher -ne '名古屋テクノロジー' -or $entry.InstallLocation -ne $install) { throw 'Installed Apps metadata mismatch.' }
   $shell = New-Object -ComObject WScript.Shell
   foreach ($folder in @($desktop,$menu)) {
-    $shortcut = $shell.CreateShortcut("$folder/かんたんPDF分割.lnk")
-    if ($shortcut.TargetPath -ne "$install\KantanPdfSplitter.exe" -or $shortcut.IconLocation -notlike '*KantanPdfSplitter.exe*') { throw "Shortcut target/icon mismatch: path=$folder; target=$($shortcut.TargetPath); icon=$($shortcut.IconLocation); expected=$install\KantanPdfSplitter.exe" }
+    $link = [IO.Path]::GetFullPath((Join-Path $folder 'かんたんPDF分割.lnk'))
+    if (-not (Test-Path -LiteralPath $link)) {
+      $found = @(Get-ChildItem $folder -Filter '*.lnk' -ErrorAction SilentlyContinue | ForEach-Object Name) -join ', '
+      throw "Shortcut missing: $link; found=$found"
+    }
+    $shortcut = $shell.CreateShortcut($link)
+    if ($shortcut.TargetPath -ne "$install\KantanPdfSplitter.exe" -or $shortcut.IconLocation -notlike '*KantanPdfSplitter.exe*') { throw "Shortcut target/icon mismatch: path=$link; target=$($shortcut.TargetPath); icon=$($shortcut.IconLocation); expected=$install\KantanPdfSplitter.exe" }
   }
   if ((Get-Item "$install/KantanPdfSplitter.exe").VersionInfo.ProductVersion -notlike "$version*") { throw 'Executable version mismatch.' }
 }
@@ -56,6 +61,9 @@ try {
   $running = [Threading.Mutex]::new($false,'Local\KantanPdfSplitter.AppRunning')
   try { Invoke-Setup 10 } finally { $running.Dispose() }
   $report.Add('PASS running-app maintenance guard (exit 10)')
+  if ($SkipAppLaunch) {
+    $report.Add('UNVERIFIED installed app startup: explicitly skipped for documented local application-control restriction')
+  } else {
   $app = Start-Process "$install/KantanPdfSplitter.exe" -WindowStyle Hidden -PassThru
   try {
     $deadline = [DateTime]::UtcNow.AddSeconds(15)
@@ -63,6 +71,7 @@ try {
     if ($app.HasExited -or $app.MainWindowTitle -ne 'かんたんPDF分割') { throw 'App did not reach its main window.' }
     $report.Add('PASS self-contained installed app startup / splash closed')
   } finally { if (-not $app.HasExited) { $app.Kill(); $app.WaitForExit() } }
+  }
   if (-not $KeepInstalled) {
     Invoke-Uninstall
     foreach ($name in @('元の資料.pdf','分割後の資料.pdf')) { if (-not (Test-Path "$install/$name")) { throw 'User PDF removed by uninstall.' } }
