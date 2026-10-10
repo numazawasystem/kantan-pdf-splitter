@@ -182,8 +182,12 @@ Section "かんたんPDF分割"
   WriteUninstaller "$INSTDIR\${UNINSTALL}"
   IfErrors install_failed
   SetOutPath "$INSTDIR"
+  CreateDirectory "$DESKTOP"
+  CreateDirectory "$SMPROGRAMS"
+  ClearErrors
   CreateShortCut "$DESKTOP\${NAME}.lnk" "$INSTDIR\${APP}" "" "$INSTDIR\${APP}" 0
   CreateShortCut "$SMPROGRAMS\${NAME}.lnk" "$INSTDIR\${APP}" "" "$INSTDIR\${APP}" 0
+  IfErrors install_failed
   WriteRegStr HKCU "${KEY}" "DisplayName" "${NAME}"
   WriteRegStr HKCU "${KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr HKCU "${KEY}" "Publisher" "名古屋テクノロジー"

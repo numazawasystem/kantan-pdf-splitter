@@ -6,10 +6,10 @@ if (-not $Setup) { $Setup = "$root/artifacts/dist/KantanPdfSplitter-Setup-$versi
 $Setup = [IO.Path]::GetFullPath($Setup)
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\KantanPdfSplitter'
 if (Test-Path $key) { throw 'An existing installation is present; refusing to replace it during smoke testing.' }
-$install = Join-Path $env:LOCALAPPDATA 'Programs/KantanPdfSplitter'
+$install = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs/KantanPdfSplitter'))
 if (Test-Path $install) { throw 'An existing install directory is present; refusing to replace it.' }
-$desktop = [Environment]::GetFolderPath('Desktop')
-$menu = [Environment]::GetFolderPath('Programs')
+$desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory, [Environment+SpecialFolderOption]::DoNotVerify)
+$menu = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs, [Environment+SpecialFolderOption]::DoNotVerify)
 foreach ($folder in @($desktop,$menu)) { if (Test-Path "$folder/かんたんPDF分割.lnk") { throw 'A pre-existing shortcut is present.' } }
 $report = [Collections.Generic.List[string]]::new()
 function Invoke-Setup([int]$Expected = 0) {
@@ -23,7 +23,7 @@ function Assert-Install {
   $shell = New-Object -ComObject WScript.Shell
   foreach ($folder in @($desktop,$menu)) {
     $shortcut = $shell.CreateShortcut("$folder/かんたんPDF分割.lnk")
-    if ($shortcut.TargetPath -ne "$install\KantanPdfSplitter.exe" -or $shortcut.IconLocation -notlike '*KantanPdfSplitter.exe*') { throw 'Shortcut target/icon mismatch.' }
+    if ($shortcut.TargetPath -ne "$install\KantanPdfSplitter.exe" -or $shortcut.IconLocation -notlike '*KantanPdfSplitter.exe*') { throw "Shortcut target/icon mismatch: path=$folder; target=$($shortcut.TargetPath); icon=$($shortcut.IconLocation); expected=$install\KantanPdfSplitter.exe" }
   }
   if ((Get-Item "$install/KantanPdfSplitter.exe").VersionInfo.ProductVersion -notlike "$version*") { throw 'Executable version mismatch.' }
 }
