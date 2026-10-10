@@ -259,8 +259,12 @@ public sealed class SplitTests : IDisposable
                 foreach (var scale in new[] { 1.0, 1.25, 1.5 })
                 {
                     window.Width = 1366 / scale - 80; window.Height = 768 / scale - 60; window.UpdateLayout();
-                    var bitmap = new RenderTargetBitmap((int)(window.ActualWidth * scale), (int)(window.ActualHeight * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
-                    bitmap.Render(window);
+                    Pump(); window.UpdateLayout();
+                    var visual = (FrameworkElement)window.Content;
+                    var buttonPosition = split.TransformToAncestor(visual).Transform(new Point());
+                    Assert.True(buttonPosition.Y >= 0 && buttonPosition.Y + split.ActualHeight <= visual.ActualHeight);
+                    var bitmap = new RenderTargetBitmap((int)(visual.ActualWidth * scale), (int)(visual.ActualHeight * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+                    bitmap.Render(visual);
                     var evidence = Environment.GetEnvironmentVariable("KANTAN_UI_EVIDENCE");
                     if (!string.IsNullOrEmpty(evidence)) { Directory.CreateDirectory(evidence); var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap)); using var file = File.Create(Path.Combine(evidence, $"ui-{scale:0.00}.png")); png.Save(file); }
                     Assert.True(split.ActualWidth > 300); Assert.True(((Button)window.FindName("DropArea")).AllowDrop);
