@@ -33,7 +33,13 @@ jobs:
           dotnet test KantanPdfSplitter.slnx -c Release --no-build --logger 'trx;LogFileName=tests.trx' --results-directory artifacts/tests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           [xml]$results = Get-Content artifacts/tests/tests.trx
-          if ([int]$results.TestRun.ResultSummary.Counters.total -lt 54 -or [int]$results.TestRun.ResultSummary.Counters.failed -ne 0) { throw 'Tests did not actually execute successfully.' }
+          if ([int]$results.TestRun.ResultSummary.Counters.total -lt 73 -or [int]$results.TestRun.ResultSummary.Counters.failed -ne 0) { throw 'Tests did not actually execute successfully.' }
+      - name: Independent PDF compatibility and rendering comparison
+        run: |
+          python -m pip install --disable-pip-version-check pypdf==6.10.0 Pillow==12.3.0 pypdfium2==5.13.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/Verify-PdfEvidence.py artifacts/pdf-evidence pdfium artifacts/tests/independent-rendering.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Check runtime dependency advisories
         run: |
           dotnet list src/KantanPdfSplitter/KantanPdfSplitter.csproj package --vulnerable --include-transitive --format json > artifacts/dependency-audit.json

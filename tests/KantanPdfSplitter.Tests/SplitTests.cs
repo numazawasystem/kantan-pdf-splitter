@@ -196,16 +196,16 @@ public sealed class SplitTests : IDisposable
         var path = Make(1, d => { d.SecuritySettings.OwnerPassword = "owner"; d.SecurityHandler.SetEncryption(method); });
         await Assert.ThrowsAsync<PdfSplitException>(() => new PdfSplitService().InspectAsync(path));
     }
-    [Theory] [InlineData("/AcroForm")] [InlineData("/Perms")] [InlineData("/Names")] [InlineData("/Outlines")] [InlineData("/OCProperties")] [InlineData("/StructTreeRoot")]
+    [Theory] [InlineData("/AcroForm")] [InlineData("/Perms")] [InlineData("/OCProperties")]
     public async Task SpecialCatalogRejected(string key)
     {
         var path = Make(1, d => d.Internals.Catalog.Elements[key] = new PdfDictionary(d));
         await Assert.ThrowsAsync<PdfSplitException>(() => new PdfSplitService().InspectAsync(path));
     }
-    [Theory] [InlineData("/Annots")] [InlineData("/Group")] [InlineData("/UserUnit")]
+    [Theory] [InlineData("/B")] [InlineData("/VP")] [InlineData("/PresSteps")]
     public async Task UnsupportedPageInformationRejected(string key)
     {
-        var path = Make(1, d => d.Pages[0].Elements[key] = key == "/UserUnit" ? new PdfInteger(2) : new PdfArray(d));
+        var path = Make(1, d => d.Pages[0].Elements[key] = new PdfArray(d));
         await Assert.ThrowsAsync<PdfSplitException>(() => new PdfSplitService().InspectAsync(path));
     }
     [Fact] public async Task IndirectSignatureRejected()
@@ -250,6 +250,7 @@ public sealed class SplitTests : IDisposable
                 SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
                 var window = new MainWindow(); window.Show();
                 var split = (Button)window.FindName("SplitButton"); Assert.False(split.IsEnabled);
+                Assert.Equal("PDFが選択されていません", ((TextBlock)window.FindName("FileSummary")).Text);
                 var task = window.LoadPdfAsync(Make(2));
                 while (!task.IsCompleted) Pump(); task.GetAwaiter().GetResult();
                 Assert.True(split.IsEnabled);
@@ -274,6 +275,28 @@ public sealed class SplitTests : IDisposable
                 var deadline = DateTime.UtcNow.AddSeconds(20);
                 while (!split.IsEnabled && DateTime.UtcNow < deadline) Pump();
                 Assert.True(split.IsEnabled);
+                var rejected = Make(1, d => d.Internals.Catalog.Elements["/AcroForm"] = new PdfDictionary(d), "form.pdf");
+                var rejectedTask = window.LoadPdfAsync(rejected); while (!rejectedTask.IsCompleted) Pump(); rejectedTask.GetAwaiter().GetResult();
+                Assert.Contains("form.pdf", ((TextBlock)window.FindName("FileSummary")).Text);
+                Assert.Contains("読み込みエラー", ((TextBlock)window.FindName("FileSummary")).Text);
+                Assert.Contains("入力フォーム", ((TextBlock)window.FindName("StatusText")).Text); Assert.False(split.IsEnabled);
+                ((RadioButton)window.FindName("EveryPage")).IsChecked = true;
+                Assert.Contains("入力フォーム", ((TextBlock)window.FindName("StatusText")).Text);
+                var compatibleTask = window.LoadPdfAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "office-like.pdf"));
+                while (!compatibleTask.IsCompleted) Pump(); compatibleTask.GetAwaiter().GetResult();
+                Assert.Equal(Visibility.Visible, ((Border)window.FindName("CompatibilityPanel")).Visibility);
+                Assert.Contains("読み上げ", ((TextBlock)window.FindName("CompatibilityText")).Text); Assert.False(split.IsEnabled);
+                var acknowledgment = (CheckBox)window.FindName("CompatibilityAcknowledgment"); acknowledgment.IsChecked = true; Assert.True(split.IsEnabled);
+                ((RadioButton)window.FindName("AtPages")).IsChecked = true; Assert.False(split.IsEnabled); Assert.False(acknowledgment.IsChecked);
+                ((TextBox)window.FindName("CutsBox")).Text = "2"; acknowledgment.IsChecked = true; Assert.True(split.IsEnabled);
+                var uiEvidence = Environment.GetEnvironmentVariable("KANTAN_UI_EVIDENCE");
+                if (!string.IsNullOrEmpty(uiEvidence))
+                {
+                    window.Width = 900; window.Height = 720; Pump(); window.UpdateLayout();
+                    ((ScrollViewer)window.FindName("InputScroll")).ScrollToBottom(); Pump(); window.UpdateLayout();
+                    var visual = (FrameworkElement)window.Content; var image = new RenderTargetBitmap((int)visual.ActualWidth, (int)visual.ActualHeight, 96, 96, PixelFormats.Pbgra32); image.Render(visual);
+                    var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(image)); using var file = File.Create(Path.Combine(uiEvidence, "ui-compatibility.png")); png.Save(file);
+                }
                 window.Close(); app.Shutdown();
             }
             catch (Exception e) { failure = e; }

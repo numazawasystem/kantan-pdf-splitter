@@ -15,15 +15,15 @@ public sealed class PdfSplitService
         path = Path.GetFullPath(path);
         using var source = OpenSource(path);
         using var doc = Read(source);
-        PdfSafety.Validate(doc, token);
+        var compatibility = PdfSafety.Validate(doc, token);
         source.Position = 0;
         var hash = Convert.ToHexString(SHA256.HashData(source));
         token.ThrowIfCancellationRequested();
-        return new PdfInfo(path, doc.PageCount, hash);
+        return new PdfInfo(path, doc.PageCount, hash) { Compatibility = compatibility };
     }, token);
 
     public Task<IReadOnlyList<string>> SplitAsync(PdfInfo info, IReadOnlyList<PageRange> ranges, string destination,
-        IProgress<SplitProgress>? progress = null, CancellationToken token = default) => RunExclusive<IReadOnlyList<string>>(() =>
+        IProgress<SplitProgress>? progress = null, CancellationToken token = default, bool acknowledgeCompatibilityWarnings = false) => RunExclusive<IReadOnlyList<string>>(() =>
     {
         destination = Path.GetFullPath(destination);
         if (!Directory.Exists(destination)) throw new PdfSplitException("保存先フォルダーがありません。選び直してください。");
@@ -32,8 +32,10 @@ public sealed class PdfSplitService
         if (currentHash != info.Sha256) throw new PdfSplitException("選択後に元PDFが変更されました。もう一度PDFを選んでください。");
         source.Position = 0;
         using var doc = Read(source);
-        PdfSafety.Validate(doc, token);
+        var compatibility = PdfSafety.Validate(doc, token);
         ValidatePlan(info, ranges, doc.PageCount);
+        if (compatibility.Warnings(ranges).Count > 0 && !acknowledgeCompatibilityWarnings)
+            throw new PdfSplitException("分割に伴う変更内容を確認してから実行してください。");
         var targets = ranges.Select(r => Path.Combine(destination, r.FileName)).ToArray();
         if (targets.Distinct(StringComparer.OrdinalIgnoreCase).Count() != targets.Length)
             throw new PdfSplitException("出力ファイル名が重複しています。");
@@ -59,11 +61,7 @@ public sealed class PdfSplitService
                 using var output = new PdfDocument();
                 output.Options.ColorMode = PdfColorMode.Undefined;
                 output.Info.Creator = "かんたんPDF分割";
-                for (var page = ranges[i].First; page <= ranges[i].Last; page++)
-                {
-                    token.ThrowIfCancellationRequested();
-                    output.AddPage(doc.Pages[page - 1]);
-                }
+                new PdfPageImporter(doc, output, ranges[i], token).Import();
                 var temporary = Path.Combine(stage, ranges[i].FileName);
                 staged.Add(temporary);
                 output.Save(temporary);
@@ -129,7 +127,8 @@ public sealed class PdfSplitService
     private static PdfDocument Read(Stream source)
     {
         try { return PdfReader.Open(source, PdfDocumentOpenMode.Import); }
-        catch (PdfReaderException e) { throw new PdfSplitException("PDFを読み取れません。破損したPDFやパスワード付きPDFには対応していません。", e); }
+        catch (PdfReaderException e) when (e.Message.Contains("password", StringComparison.OrdinalIgnoreCase)) { throw new PdfSplitException("このPDFはパスワードが必要なため読み取れません。保護のないPDFを選んでください。", e); }
+        catch (PdfReaderException e) { throw new PdfSplitException("PDFの構造を読み取れません。破損または対応していない形式の可能性があります。", e); }
     }
     private static void TryDelete(string path) { try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
 }

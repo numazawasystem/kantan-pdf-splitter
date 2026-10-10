@@ -6,11 +6,11 @@ Push-Location $root
 try {
   $version = ([xml](Get-Content Directory.Build.props -Raw)).Project.PropertyGroup.Version
   if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Version must contain three numeric components.' }
-  $payload = Join-Path $root 'artifacts/publish'
+  $payload = Join-Path $root "artifacts/publish/$version"
   $output = Join-Path $root 'artifacts/dist'
   if (Test-Path $payload) {
     $resolved = (Resolve-Path $payload).Path
-    if ($resolved -ne [IO.Path]::GetFullPath((Join-Path $root 'artifacts/publish'))) { throw 'Unsafe cleanup target.' }
+    if ($resolved -ne [IO.Path]::GetFullPath((Join-Path $root "artifacts/publish/$version"))) { throw 'Unsafe cleanup target.' }
     Remove-Item -LiteralPath $resolved -Recurse -Force
   }
   New-Item -ItemType Directory -Path $output -Force | Out-Null
@@ -44,7 +44,9 @@ try {
   $zip = Join-Path $output "KantanPdfSplitter-$version-win-x64.zip"
   if (Test-Path $zip) { Remove-Item -LiteralPath $zip }
   Compress-Archive -Path "$payload/*" -DestinationPath $zip
-  $hashes = Get-ChildItem $output -File | Where-Object Extension -in '.exe','.zip' | Get-FileHash -Algorithm SHA256
-  $hashes | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content "$output/SHA256SUMS.txt" -Encoding ascii
+  $hashes = Get-Item "$output/KantanPdfSplitter-Setup-$version.exe", $zip | Get-FileHash -Algorithm SHA256
+  $hashLines = $hashes | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $([IO.Path]::GetFileName($_.Path))" }
+  $hashLines | Set-Content "$output/SHA256SUMS-$version.txt" -Encoding ascii
+  $hashLines | Set-Content "$output/SHA256SUMS.txt" -Encoding ascii
   $hashes | Format-Table Hash,Path -AutoSize
 } finally { Pop-Location }

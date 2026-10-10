@@ -1,54 +1,80 @@
 using PdfSharp.Pdf;
-using PdfSharp.Pdf.Advanced;
 
 namespace KantanPdfSplitter.Core;
 
 internal static class PdfSafety
 {
-    private const string Unsupported = "このPDFには、署名・入力欄・注釈・添付・しおり・特殊な表示設定など、保持できない情報が含まれています。初版では分割できません。電子署名の有効性は分割後に維持されません。";
-    // PDFsharp 6.2.4 ImportExternalPage copies these content and geometry keys.
-    private static readonly HashSet<string> AllowedPageKeys = ["/Type", "/Parent", "/Resources", "/Contents", "/MediaBox", "/CropBox", "/Rotate", "/BleedBox", "/TrimBox", "/ArtBox"];
-    private static readonly HashSet<string> UnsupportedCatalogKeys = ["/AcroForm", "/Perms", "/Names", "/Outlines", "/OpenAction", "/AA", "/OCProperties", "/StructTreeRoot", "/Collection", "/AF", "/Requirements", "/Extensions", "/Threads"];
-    private static readonly HashSet<string> UnsafeKeys = ["/ByteRange", "/JavaScript", "/JS", "/EmbeddedFiles", "/EF", "/XFA", "/RichMediaContent", "/AA", "/AF", "/Annots"];
+    private static readonly HashSet<string> PageKeys = ["/Type", "/Parent", "/Resources", "/Contents", "/MediaBox", "/CropBox", "/Rotate", "/BleedBox", "/TrimBox", "/ArtBox", "/Annots", "/Group", "/UserUnit", "/Tabs", "/StructParents", "/Metadata", "/PieceInfo", "/LastModified", "/ID", "/Dur", "/Trans"];
+    private static readonly HashSet<string> OrdinaryAnnotations = ["/Link", "/Text", "/Highlight", "/Underline", "/StrikeOut", "/Squiggly", "/Ink", "/Square", "/Circle", "/Line", "/PolyLine", "/Polygon", "/FreeText", "/Stamp", "/Caret", "/Popup"];
 
-    public static void Validate(PdfDocument doc, CancellationToken token)
+    public static PdfCompatibility Validate(PdfDocument doc, CancellationToken token)
     {
-        // PdfReader resets active encryption after decryption, so IsEncrypted
-        // alone misses owner-only protection. The parsed original handler keeps
-        // its /Filter entry, including when the opening password is empty.
-        if (doc.SecuritySettings.IsEncrypted || doc.SecurityHandler.Elements.ContainsKey("/Filter"))
-            throw new PdfSplitException("パスワードや利用制限が設定されたPDFには対応していません。保護のないPDFを選んでください。");
-        if (doc.PageCount < 1) throw new PdfSplitException("ページのないPDFは分割できません。");
-        if (doc.Internals.Catalog.Elements.Keys.Any(UnsupportedCatalogKeys.Contains)) throw new PdfSplitException(Unsupported);
-        foreach (var page in doc.Pages)
+        if (doc.SecuritySettings.IsEncrypted || doc.SecurityHandler.Elements.ContainsKey("/Filter")) Reject("パスワードまたは利用制限が設定されています。保護のないPDFを選んでください。");
+        if (doc.PageCount < 1) Reject("ページがありません。");
+        var catalog = doc.Internals.Catalog;
+        if (catalog.Elements.ContainsKey("/AcroForm")) Reject("入力フォームが含まれています。入力欄の値や動作を安全に引き継げないため分割できません。");
+        if (catalog.Elements.ContainsKey("/Perms")) Reject("電子署名または証明用の情報が含まれています。分割後に署名の有効性を維持できません。");
+        foreach (var key in new[] { "/OCProperties", "/Collection", "/Requirements", "/Extensions", "/Threads" })
+            if (catalog.Elements.ContainsKey(key)) Reject($"対応していない文書設定（{key}）が含まれています。");
+        var navigation = new PdfNavigation(doc);
+        var links = new List<PdfPageLink>();
+        for (var index = 0; index < doc.PageCount; index++)
         {
             token.ThrowIfCancellationRequested();
-            if (page.Elements.Keys.Any(key => !AllowedPageKeys.Contains(key))) throw new PdfSplitException(Unsupported);
-            if (page.Width.Point <= 0 || page.Height.Point <= 0 || page.Rotate % 90 != 0)
-                throw new PdfSplitException("ページのサイズや向きを読み取れません。PDFを確認してください。");
+            var page = doc.Pages[index];
+            var unknown = page.Elements.Keys.FirstOrDefault(key => !PageKeys.Contains(key));
+            if (unknown != null) Reject($"{index + 1}ページに対応していないページ設定（{unknown}）があります。");
+            if (page.Width.Point <= 0 || page.Height.Point <= 0 || page.Rotate % 90 != 0) Reject($"{index + 1}ページのサイズまたは向きが不正です。");
+            if (page.Elements.ContainsKey("/UserUnit") && (page.Elements.GetReal("/UserUnit") <= 0 || page.Elements.GetReal("/UserUnit") > 75000)) Reject($"{index + 1}ページのサイズ倍率が不正です。");
+            var annotations = page.Elements.GetArray("/Annots");
+            if (annotations == null) continue;
+            foreach (var item in annotations.Elements)
+            {
+                if (PdfNavigation.Resolve(item) is not PdfDictionary annotation) Reject($"{index + 1}ページの注釈を読み取れません。");
+                else
+                {
+                    var subtype = PdfNavigation.Name(annotation.Elements["/Subtype"]);
+                    if (subtype == "/Widget") Reject($"{index + 1}ページに入力フォームの欄があります。");
+                    if (subtype == "/FileAttachment") Reject($"{index + 1}ページに添付ファイルがあります。");
+                    if (!OrdinaryAnnotations.Contains(subtype)) Reject($"{index + 1}ページに対応していない注釈（{subtype}）があります。");
+                    if (subtype == "/Link" && navigation.LinkDestination(annotation) is { } destination) links.Add(new(index + 1, destination.Page));
+                }
+            }
         }
-        // Inspect both indirect objects and nested direct objects. Resolve names via
-        // the parser, so escaped keys and compressed object streams are covered.
         var pending = new Stack<PdfItem>(doc.Internals.GetAllObjects());
         var visited = new HashSet<PdfItem>(ReferenceEqualityComparer.Instance);
         while (pending.TryPop(out var item))
         {
             token.ThrowIfCancellationRequested();
             if (!visited.Add(item)) continue;
-            if (item is PdfReference reference) { pending.Push(reference.Value); continue; }
+            item = PdfNavigation.Resolve(item)!;
             if (item is PdfDictionary dictionary)
             {
-                if (dictionary.Elements.Keys.Any(UnsafeKeys.Contains)) throw new PdfSplitException(Unsupported);
-                foreach (var key in new[] { "/Type", "/FT", "/S" })
+                if (dictionary.Elements.ContainsKey("/ByteRange") || PdfNavigation.Name(dictionary.Elements["/Type"]) == "/Sig" || PdfNavigation.Name(dictionary.Elements["/FT"]) == "/Sig") Reject("電子署名が含まれています。分割後に署名の有効性を維持できません。");
+                if (dictionary.Elements.ContainsKey("/XFA") || dictionary.Elements.ContainsKey("/FT")) Reject("入力フォームが含まれています。");
+                if (dictionary.Elements.Keys.Any(key => key is "/EF" or "/EmbeddedFiles" or "/AF") || PdfNavigation.Name(dictionary.Elements["/Type"]) == "/EmbeddedFile") Reject("添付ファイルが含まれています。添付を引き継げないため分割できません。");
+                if (dictionary.Elements.Keys.Any(key => key is "/JS" or "/JavaScript" or "/AA") || PdfNavigation.Name(dictionary.Elements["/S"]) == "/JavaScript") Reject("自動実行する操作やスクリプトが含まれています。");
+                var action = PdfNavigation.Name(dictionary.Elements["/S"]);
+                if (action is "/Launch" or "/GoToR" or "/SubmitForm" or "/ImportData" or "/Rendition" or "/GoToE") Reject($"外部ファイルやプログラムを操作する設定（{action}）があります。");
+                if (dictionary.Elements.ContainsKey("/RichMediaContent")) Reject("動画などの特殊な再生情報が含まれています。");
+                if (action == "/URI")
                 {
-                    if (dictionary.Elements[key] is PdfName name && name.Value is "/Sig" or "/EmbeddedFile" or "/JavaScript" or "/Launch" or "/GoToR")
-                        throw new PdfSplitException(Unsupported);
+                    var uri = dictionary.Elements.GetString("/URI");
+                    if (!Uri.TryCreate(uri, UriKind.Absolute, out var address) || address.Scheme is not ("http" or "https" or "mailto")) Reject("対応していない種類の外部リンクがあります。Webページとメールのリンクに対応しています。");
                 }
                 foreach (var child in dictionary.Elements.Values) if (child != null) pending.Push(child);
             }
-            else if (item is PdfArray array)
-                foreach (var child in array.Elements) pending.Push(child);
+            else if (item is PdfArray array) foreach (var child in array.Elements) pending.Push(child);
         }
+        var bookmarks = navigation.ReadBookmarks();
+        return new PdfCompatibility
+        {
+            HasTags = catalog.Elements.ContainsKey("/StructTreeRoot") || catalog.Elements.GetDictionary("/MarkInfo")?.Elements.GetBoolean("/Marked") == true || doc.Pages.Cast<PdfPage>().Any(p => p.Elements.ContainsKey("/StructParents")),
+            HasBookmarks = bookmarks.Count > 0, HasNamedDestinations = navigation.NamedDestinations.Count > 0,
+            HasUnresolvedBookmarks = navigation.HasUnresolvedBookmarks,
+            HasInitialView = catalog.Elements.ContainsKey("/OpenAction") || catalog.Elements.ContainsKey("/PageLabels") || catalog.Elements.ContainsKey("/ViewerPreferences"),
+            PageLinks = links.AsReadOnly()
+        };
     }
+    private static void Reject(string reason) => throw new PdfSplitException("このPDFは分割できません。" + reason);
 }
-

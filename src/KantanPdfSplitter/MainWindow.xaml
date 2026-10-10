@@ -28,6 +28,13 @@
                 <ListBox.ItemTemplate><DataTemplate><Grid Margin="4,1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}"/><TextBlock Grid.Column="1" Text="{Binding Description}" Margin="16,0,0,0" Foreground="#53687B"/></Grid></DataTemplate></ListBox.ItemTemplate>
               </ListBox>
             </Border>
+            <Border x:Name="CompatibilityPanel" Visibility="Collapsed" Background="#FFF7E5" BorderBrush="#B58C36" BorderThickness="1" CornerRadius="5" Padding="12" Margin="0,12,0,0">
+              <StackPanel>
+                <TextBlock Text="分割前にご確認ください" FontWeight="SemiBold"/>
+                <TextBlock x:Name="CompatibilityText" TextWrapping="Wrap" Margin="0,6,0,8" Foreground="#6D521C"/>
+                <CheckBox x:Name="CompatibilityAcknowledgment" Content="上記の変更内容を確認しました" Checked="WarningsAcknowledged" Unchecked="WarningsAcknowledged" AutomationProperties.Name="分割に伴う変更内容の確認"/>
+              </StackPanel>
+            </Border>
             <TextBlock Text="保存先フォルダー" Style="{StaticResource Section}" Margin="0,12,0,6"/>
             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="DestinationBox" IsReadOnly="True" AutomationProperties.Name="保存先フォルダー" TabIndex="5"/><Button Grid.Column="1" Content="選ぶ…" Click="ChooseFolder_Click" Margin="10,0,0,0" TabIndex="6"/></Grid>
           </StackPanel>

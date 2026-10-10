@@ -13,6 +13,8 @@ public partial class MainWindow : Window
     private PdfInfo? _info;
     private IReadOnlyList<PageRange>? _plan;
     private bool _busy;
+    private string? _loadFailure;
+    private IReadOnlyList<string> _warnings = [];
     private string? _completedFolder;
     public MainWindow() => InitializeComponent();
 
@@ -39,7 +41,9 @@ public partial class MainWindow : Window
     internal async Task LoadPdfAsync(string path)
     {
         if (_busy) return;
-        _info = null; _plan = null; PreviewList.ItemsSource = null; FileSummary.Text = "PDFを確認しています…";
+        _info = null; _plan = null; _loadFailure = null; _warnings = [];
+        CompatibilityPanel.Visibility = Visibility.Collapsed; CompatibilityAcknowledgment.IsChecked = false;
+        PreviewList.ItemsSource = null; PreviewTitle.Text = "分割結果のプレビュー"; FileSummary.Text = "PDFを確認しています…";
         SetBusy(true); ClearCompletion(); SetStatus("PDFを確認しています…");
         try
         {
@@ -49,7 +53,12 @@ public partial class MainWindow : Window
             if (string.IsNullOrEmpty(DestinationBox.Text)) DestinationBox.Text = Path.GetDirectoryName(path);
             UpdatePlan();
         }
-        catch (Exception error) { FileSummary.Text = "PDFが選択されていません"; ShowError(error); }
+        catch (Exception error)
+        {
+            _loadFailure = ErrorMessage(error);
+            FileSummary.Text = $"{Path.GetFileName(path)}  ・  読み込みエラー"; FileSummary.ToolTip = path;
+            ShowError(error);
+        }
         finally { SetBusy(false); }
     }
     private void PlanChanged(object sender, RoutedEventArgs e) { if (IsInitialized) { ClearCompletion(); UpdatePlan(); } }
@@ -57,6 +66,8 @@ public partial class MainWindow : Window
     {
         CutsPanel.Visibility = AtPages.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         _plan = null;
+        _warnings = []; CompatibilityAcknowledgment.IsChecked = false;
+        CompatibilityPanel.Visibility = Visibility.Collapsed;
         PreviewList.ItemsSource = null;
         if (_info != null)
         {
@@ -64,11 +75,15 @@ public partial class MainWindow : Window
             {
                 _plan = SplitPlan.Create(_info, EveryPage.IsChecked == true, CutsBox.Text);
                 PreviewList.ItemsSource = _plan;
+                _warnings = _info.Compatibility.Warnings(_plan);
+                CompatibilityText.Text = string.Join("\n\n", _warnings);
+                CompatibilityPanel.Visibility = _warnings.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
                 PreviewTitle.Text = $"分割結果のプレビュー  ・  {_plan.Count}ファイル";
-                SetStatus("元のPDFは変更されません。");
+                SetStatus(_warnings.Count > 0 ? "分割に伴う変更があります。画面の確認欄をご確認ください。" : "元のPDFは変更されません。");
             }
             catch (PdfSplitException error) { PreviewTitle.Text = "分割結果のプレビュー"; SetStatus(error.Message, true); }
         }
+        else if (_loadFailure != null) SetStatus(_loadFailure, true);
         UpdateRunState();
     }
     private void ChooseFolder_Click(object sender, RoutedEventArgs e)
@@ -80,7 +95,7 @@ public partial class MainWindow : Window
     }
     private async void Split_Click(object sender, RoutedEventArgs e)
     {
-        if (_busy || _info == null || _plan == null || string.IsNullOrWhiteSpace(DestinationBox.Text)) return;
+        if (_busy || _info == null || _plan == null || string.IsNullOrWhiteSpace(DestinationBox.Text) || (_warnings.Count > 0 && CompatibilityAcknowledgment.IsChecked != true)) return;
         var folder = DestinationBox.Text;
         SetBusy(true); ClearCompletion(); SetStatus("PDFを分割しています…");
         Progress.IsIndeterminate = false; Progress.Maximum = _plan.Count; Progress.Value = 0;
@@ -90,7 +105,7 @@ public partial class MainWindow : Window
             {
                 Progress.Value = p.Completed;
                 SetStatus($"PDFを分割しています… {p.Completed} / {p.Total}");
-            }));
+            }), acknowledgeCompatibilityWarnings: CompatibilityAcknowledgment.IsChecked == true);
             _completedFolder = folder; OpenFolderButton.Visibility = Visibility.Visible;
             SetStatus($"完了しました。{paths.Count}ファイルを保存しました。");
         }
@@ -104,19 +119,21 @@ public partial class MainWindow : Window
         SplitButton.Content = value ? "処理中…" : "PDFを分割する";
         UpdateRunState();
     }
-    private void UpdateRunState() => SplitButton.IsEnabled = !_busy && _info != null && _plan?.Count > 0 && !string.IsNullOrWhiteSpace(DestinationBox.Text);
+    private void WarningsAcknowledged(object sender, RoutedEventArgs e) { if (IsInitialized) UpdateRunState(); }
+    private void UpdateRunState() => SplitButton.IsEnabled = !_busy && _info != null && _plan?.Count > 0 && !string.IsNullOrWhiteSpace(DestinationBox.Text) && (_warnings.Count == 0 || CompatibilityAcknowledgment.IsChecked == true);
     private void ClearCompletion() { _completedFolder = null; OpenFolderButton.Visibility = Visibility.Collapsed; }
     private void SetStatus(string message, bool error = false)
     {
         StatusText.Text = message;
         StatusText.Foreground = new System.Windows.Media.SolidColorBrush(error ? System.Windows.Media.Color.FromRgb(164, 37, 37) : System.Windows.Media.Color.FromRgb(23, 50, 77));
     }
-    private void ShowError(Exception error) => SetStatus(error switch
+    private void ShowError(Exception error) => SetStatus(ErrorMessage(error), true);
+    private static string ErrorMessage(Exception error) => error switch
     {
         PdfSplitException => error.Message,
         OutOfMemoryException => "このPDFを処理するためのメモリが足りません。他のアプリを終了してお試しください。",
         _ => "処理を完了できませんでした。PDFと保存先を確認してお試しください。"
-    }, true);
+    };
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
         try { if (_completedFolder != null) Process.Start(new ProcessStartInfo(_completedFolder) { UseShellExecute = true }); }

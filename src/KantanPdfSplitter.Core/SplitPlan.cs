@@ -3,7 +3,31 @@ using System.Globalization;
 namespace KantanPdfSplitter.Core;
 
 public sealed class PdfSplitException(string message, Exception? inner = null) : Exception(message, inner);
-public sealed record PdfInfo(string Path, int PageCount, string Sha256);
+public sealed record PdfInfo(string Path, int PageCount, string Sha256)
+{
+    public PdfCompatibility Compatibility { get; init; } = new();
+}
+public sealed record PdfPageLink(int SourcePage, int TargetPage);
+public sealed record PdfCompatibility
+{
+    public bool HasTags { get; init; }
+    public bool HasBookmarks { get; init; }
+    public bool HasNamedDestinations { get; init; }
+    public bool HasUnresolvedBookmarks { get; init; }
+    public bool HasInitialView { get; init; }
+    public IReadOnlyList<PdfPageLink> PageLinks { get; init; } = [];
+    public IReadOnlyList<string> Warnings(IReadOnlyList<PageRange> ranges)
+    {
+        var warnings = new List<string>();
+        if (HasTags) warnings.Add("読み上げ用の構造情報は引き継がれません。文字・画像の見た目と文字検索は維持されます。");
+        if (ranges.Count > 1 && (HasBookmarks || HasNamedDestinations)) warnings.Add("しおりと移動先の名前は、各出力PDFに含まれるページのものを引き継ぎます。それ以外の移動先は引き継がれません。");
+        if (PageLinks.Any(link => link.TargetPage == 0 || !ranges.Any(r => link.SourcePage >= r.First && link.SourcePage <= r.Last && link.TargetPage >= r.First && link.TargetPage <= r.Last)))
+            warnings.Add("別の出力PDFへ移動するページ内リンクや、移動先を読み取れないリンクは、クリックして移動できなくなります。リンクの見た目は維持します。");
+        if (HasUnresolvedBookmarks) warnings.Add("移動先を読み取れないしおりは、引き継げないことがあります。");
+        if (HasInitialView) warnings.Add("PDFを開いたときの移動先・表示設定は引き継がれません。");
+        return warnings.AsReadOnly();
+    }
+}
 public sealed record PageRange(int First, int Last, string FileName)
 {
     public int Count => Last - First + 1;
