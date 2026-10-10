@@ -95,6 +95,8 @@ public sealed class PdfSplitService
             foreach (var path in staged) TryDelete(path);
             TryDelete(Path.Combine(stage, "write-check.tmp"));
             try { if (Directory.Exists(stage)) Directory.Delete(stage); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            if (Directory.Exists(stage))
+                throw new PdfSplitException($"一時ファイルを削除できませんでした。保存先をご確認ください：{stage}。元のPDFは変更されていません。");
         }
     }, token);
 

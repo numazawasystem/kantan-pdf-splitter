@@ -160,6 +160,19 @@ public sealed class SplitTests : IDisposable
         var path = Make(2); using var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
         await Assert.ThrowsAsync<PdfSplitException>(() => new PdfSplitService().InspectAsync(path));
     }
+    [Fact] public async Task CleanupFailureReportsResidualStagingFolder()
+    {
+        FileStream? locked = null;
+        var s = new PdfSplitService { BeforePublish = _ => { var stage = Directory.GetDirectories(Output).Single(); locked = new FileStream(Path.Combine(stage, "sample_001.pdf"), FileMode.Open, FileAccess.Read, FileShare.None); } };
+        var info = await s.InspectAsync(Make(2));
+        try
+        {
+            var error = await Assert.ThrowsAsync<PdfSplitException>(() => s.SplitAsync(info, SplitPlan.Create(info, true, ""), Output));
+            Assert.Contains("一時ファイル", error.Message); Assert.Single(Directory.GetDirectories(Output));
+            Assert.Empty(Directory.GetFiles(Output));
+        }
+        finally { locked?.Dispose(); }
+    }
     [Fact] public async Task ChangedInputRejected()
     {
         var path = Make(2); var s = new PdfSplitService(); var info = await s.InspectAsync(path); Make(3);
