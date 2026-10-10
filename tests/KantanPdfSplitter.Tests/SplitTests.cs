@@ -72,6 +72,12 @@ public sealed class SplitTests : IDisposable
         }
         Assert.Equal(before, SHA256.HashData(File.ReadAllBytes(path)));
         Assert.Empty(Directory.GetDirectories(Output));
+        var evidence = Environment.GetEnvironmentVariable("KANTAN_PDF_EVIDENCE");
+        if (pages == 20 && !string.IsNullOrEmpty(evidence))
+        {
+            Directory.CreateDirectory(evidence); File.Copy(path, Path.Combine(evidence, "source-20.pdf"), true);
+            foreach (var output in paths) File.Copy(output, Path.Combine(evidence, Path.GetFileName(output)), true);
+        }
     }
     private static void Compare(PdfPage a, PdfPage b)
     {

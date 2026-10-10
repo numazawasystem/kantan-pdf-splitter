@@ -21,6 +21,8 @@ try {
   $runtimeVersion = ((Get-Content "$payload/KantanPdfSplitter.runtimeconfig.json" -Raw | ConvertFrom-Json).runtimeOptions.includedFrameworks | Where-Object name -eq 'Microsoft.NETCore.App').version
   Copy-Item "$runtimePackage/$runtimeVersion/LICENSE.TXT" "$payload/licenses/dotnet/LICENSE.txt" -Force
   Copy-Item "$runtimePackage/$runtimeVersion/THIRD-PARTY-NOTICES.TXT" "$payload/licenses/dotnet/ThirdPartyNotices.txt" -Force
+  $desktopVersion = ((Get-Content "$payload/KantanPdfSplitter.runtimeconfig.json" -Raw | ConvertFrom-Json).runtimeOptions.includedFrameworks | Where-Object name -eq 'Microsoft.WindowsDesktop.App').version
+  Copy-Item "$env:USERPROFILE/.nuget/packages/microsoft.windowsdesktop.app.runtime.win-x64/$desktopVersion/LICENSE" "$payload/licenses/dotnet/WPF-LICENSE.txt" -Force
   $owned = @(Get-ChildItem $payload -File -Recurse | ForEach-Object { [IO.Path]::GetRelativePath($payload, $_.FullName) } | Sort-Object)
   if ($owned | Where-Object { $_ -match '(?i)\.pdf$|\.\.|:' }) { throw 'Unsafe payload name.' }
   [IO.File]::WriteAllLines((Join-Path $payload 'owned-files.txt'), $owned, [Text.Encoding]::ASCII)

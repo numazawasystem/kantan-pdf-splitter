@@ -29,6 +29,7 @@ jobs:
       - name: Automated tests and UI contract
         run: |
           $env:KANTAN_UI_EVIDENCE = Join-Path $PWD 'artifacts/ui'
+          $env:KANTAN_PDF_EVIDENCE = Join-Path $PWD 'artifacts/pdf-evidence'
           dotnet test KantanPdfSplitter.slnx -c Release --no-build --logger 'trx;LogFileName=tests.trx' --results-directory artifacts/tests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           [xml]$results = Get-Content artifacts/tests/tests.trx
@@ -51,6 +52,7 @@ jobs:
           path: |
             artifacts/tests
             artifacts/ui
+            artifacts/pdf-evidence
             artifacts/dependency-audit.json
           retention-days: 7
       - name: Save distribution only for release or manual runs

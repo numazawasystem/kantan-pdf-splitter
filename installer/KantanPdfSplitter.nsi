@@ -119,9 +119,17 @@ Function ${PREFIX}Cleanup
     IfErrors cleanup_close
     ${${PREFIX}TrimNewLines} "$1" $1
     StrCmp $1 "" cleanup_loop
-    ${${PREFIX}StrStr} $2 "$1" ".."
+    !if "${PREFIX}" == "un."
+      ${UnStrStr} $2 "$1" ".."
+    !else
+      ${StrStr} $2 "$1" ".."
+    !endif
     StrCmp $2 "" 0 cleanup_loop
-    ${${PREFIX}StrStr} $2 "$1" ":"
+    !if "${PREFIX}" == "un."
+      ${UnStrStr} $2 "$1" ":"
+    !else
+      ${StrStr} $2 "$1" ":"
+    !endif
     StrCmp $2 "" 0 cleanup_loop
     StrCpy $2 $1 1
     StrCmp $2 "\" cleanup_loop

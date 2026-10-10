@@ -100,5 +100,11 @@ try {
     }
 }
 finally {
-    if (Test-Path -LiteralPath $working) { [IO.Directory]::Delete($working, $true) }
+    if (Test-Path -LiteralPath $working) {
+        $cleanupTarget = [IO.Path]::GetFullPath($working)
+        $cleanupRoot = [IO.Path]::GetFullPath($workingParent) + [IO.Path]::DirectorySeparatorChar
+        if (-not $cleanupTarget.StartsWith($cleanupRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe NSIS working path." }
+        [IO.Directory]::Delete($cleanupTarget, $true)
+    }
 }
+
