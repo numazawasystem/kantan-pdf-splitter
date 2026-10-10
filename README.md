@@ -38,7 +38,9 @@ dotnet test KantanPdfSplitter.slnx -c Release --no-build
 ./scripts/Test-InstallerSmoke.ps1
 ```
 
-通常CIはWindows 2025でrestore / build / tests / self-contained publish / NSIS / installer smokeを実施し、大きな配布物は保存しません。手動実行またはReleaseでSetup・ZIP・SHA-256を7日保存します。将来の署名は `Build-Installer.ps1 -SignToolCommand` を使用し、publishしたPEファイルを署名してからNSISに渡してください。署名証明書や認証情報はリポジトリに保存しません。
+通常CIはWindows 2025でrestore / build / tests / self-contained publish / NSIS / installer smokeを実施し、大きな配布物は保存しません。手動実行またはReleaseでSetup・ZIP・SHA-256を7日保存します。将来の署名は `Build-Installer.ps1` の `-SignPublishedFilesScript` と `-SignToolCommand` を両方指定します。前者は `-PublishDirectory` を受け取り、publish後のPEファイルを署名する外部PowerShellスクリプトです。全PEの署名検証後にNSISへ渡し、後者でuninstallerとSetupを署名します。署名証明書や認証情報はリポジトリに保存しません。
+
+実機のアプリケーション制御で起動できないことが確認された環境では、installer lifecycleだけを `Test-InstallerSmoke.ps1 -SkipAppLaunch` で検証できます。起動項目は明示的にUNVERIFIEDと記録します。通常CIではこのオプションを使わず、実際のMain Window起動も必須です。
 
 ## ブランド・ライセンス
 

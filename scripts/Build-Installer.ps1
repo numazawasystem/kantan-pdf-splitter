@@ -1,5 +1,6 @@
-param([string]$SignToolCommand = '')
+param([string]$SignToolCommand = '', [string]$SignPublishedFilesScript = '')
 $ErrorActionPreference = 'Stop'
+if ([bool]$SignToolCommand -ne [bool]$SignPublishedFilesScript) { throw 'For signed packaging, both runtime signing script and NSIS signing command are required.' }
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 try {
@@ -23,6 +24,14 @@ try {
   Copy-Item "$runtimePackage/$runtimeVersion/THIRD-PARTY-NOTICES.TXT" "$payload/licenses/dotnet/ThirdPartyNotices.txt" -Force
   $desktopVersion = ((Get-Content "$payload/KantanPdfSplitter.runtimeconfig.json" -Raw | ConvertFrom-Json).runtimeOptions.includedFrameworks | Where-Object name -eq 'Microsoft.WindowsDesktop.App').version
   Copy-Item "$env:USERPROFILE/.nuget/packages/microsoft.windowsdesktop.app.runtime.win-x64/$desktopVersion/LICENSE" "$payload/licenses/dotnet/WPF-LICENSE.txt" -Force
+  if ($SignPublishedFilesScript) {
+    $signScript = (Resolve-Path -LiteralPath $SignPublishedFilesScript).Path
+    & $signScript -PublishDirectory $payload
+    if ($LASTEXITCODE -ne 0) { throw 'Runtime signing script failed.' }
+    foreach ($file in (Get-ChildItem $payload -File -Recurse | Where-Object Extension -in '.exe','.dll')) {
+      if ((Get-AuthenticodeSignature -LiteralPath $file.FullName).Status -ne 'Valid') { throw "Runtime signing was not verified: $($file.Name)" }
+    }
+  }
   $owned = @(Get-ChildItem $payload -File -Recurse | ForEach-Object { [IO.Path]::GetRelativePath($payload, $_.FullName) } | Sort-Object)
   if ($owned | Where-Object { $_ -match '(?i)\.pdf$|\.\.|:' }) { throw 'Unsafe payload name.' }
   [IO.File]::WriteAllLines((Join-Path $payload 'owned-files.txt'), $owned, [Text.Encoding]::ASCII)

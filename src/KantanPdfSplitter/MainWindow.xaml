@@ -1,5 +1,5 @@
 <Window x:Class="KantanPdfSplitter.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="かんたんPDF分割" Width="900" Height="720" MinWidth="640" MinHeight="480" Icon="Assets/app.ico" WindowStartupLocation="CenterScreen" Background="#F3F6F8" Foreground="#17324D" UseLayoutRounding="True" Closing="Window_Closing">
-  <Grid>
+  <Grid Background="#F3F6F8">
   <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <ScrollViewer x:Name="InputScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
     <Grid Margin="28,18,28,12">
