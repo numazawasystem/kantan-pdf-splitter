@@ -96,7 +96,9 @@ internal sealed class PdfPageImporter(PdfDocument source, PdfDocument output, Pa
                 var children = Write(bookmark.Children, node);
                 var destination = bookmark.Destination == null ? null : LocalDestination(bookmark.Destination);
                 var web = bookmark.Source.Elements.GetDictionary("/A") is { } action && PdfNavigation.Name(action.Elements["/S"]) == "/URI" ? action : null;
-                if (destination == null && web == null && children == 0) continue;
+                // A deliberately non-clickable heading is still useful outline
+                // information. Prune only a leaf whose existing target is lost.
+                if (destination == null && web == null && children == 0 && bookmark.Destination != null) continue;
                 foreach (var key in new[] { "/Title", "/C", "/F" }) if (bookmark.Source.Elements[key] is { } value) node.Elements[key] = Copy(value);
                 node.Elements.SetReference("/Parent", parent);
                 if (destination != null) node.Elements["/Dest"] = destination;

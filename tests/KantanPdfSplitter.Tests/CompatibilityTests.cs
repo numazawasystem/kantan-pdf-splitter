@@ -150,6 +150,14 @@ public sealed class CompatibilityTests : IDisposable
         var service = new PdfSplitService(); var info = await service.InspectAsync(path);
         Assert.Equal(3, (await service.SplitAsync(info, SplitPlan.Create(info, true, ""), Output)).Count);
     }
+    [Fact] public async Task NonClickableOutlineHeadingRetained()
+    {
+        var path = Make(d => { var root = new PdfDictionary(d); d.Internals.AddObject(root); var heading = new PdfDictionary(d); d.Internals.AddObject(heading); heading.Elements.SetString("/Title", "Section heading"); heading.Elements.SetReference("/Parent", root); root.Elements.SetReference("/First", heading); root.Elements.SetReference("/Last", heading); d.Internals.Catalog.Elements.SetReference("/Outlines", root); });
+        var service = new PdfSplitService(); var info = await service.InspectAsync(path);
+        var outputs = await service.SplitAsync(info, SplitPlan.Create(info, false, "3"), Output);
+        using var result = PdfReader.Open(outputs[0], PdfDocumentOpenMode.Import);
+        Assert.Equal("Section heading", Assert.Single(new PdfNavigation(result).ReadBookmarks()).Source.Elements.GetString("/Title"));
+    }
     [Fact] public async Task ActualInputFieldsRemainRejected()
     {
         var path = Make(d => { var field = new PdfDictionary(d); field.Elements.SetName("/FT", "/Tx"); field.Elements.SetString("/T", "name"); var fields = new PdfArray(d); fields.Elements.Add(field); var form = new PdfDictionary(d); form.Elements["/Fields"] = fields; d.Internals.Catalog.Elements["/AcroForm"] = form; });
