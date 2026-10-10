@@ -1,0 +1,6 @@
+<Window x:Class="KantanPdfSplitter.SplashWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="起動中" Width="520" Height="250" WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" WindowStartupLocation="CenterScreen" Background="#F3F6F8" UseLayoutRounding="True">
+  <Border BorderBrush="#CBD6DF" BorderThickness="1" Padding="28"><StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+    <Image Source="Assets/logo.png" Width="390" Height="130" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+    <TextBlock Text="かんたんPDF分割" Margin="0,8,0,0" FontSize="32" FontWeight="Bold" TextAlignment="Center"/>
+  </StackPanel></Border>
+</Window>

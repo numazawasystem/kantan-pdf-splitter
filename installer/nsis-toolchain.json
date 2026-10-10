@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "name": "Nullsoft Scriptable Install System",
+  "shortName": "NSIS",
+  "version": "3.13",
+  "releasedUtc": "2026-09-27",
+  "officialProject": "https://nsis.sourceforge.io/",
+  "officialDownloadUrl": "https://sourceforge.net/projects/nsis/files/NSIS%203/3.13/nsis-3.13.zip/download",
+  "archiveFileName": "nsis-3.13.zip",
+  "archiveSize": 2363925,
+  "archiveSha256": "BA63DFFC4410EE89193E1CB5A41989991BD77C61068DA17E3156D136B7B0B3D8",
+  "fallbackTransport": {
+    "description": "Chocolatey community package containing the byte-identical official NSIS archive; used only when SourceForge blocks the runner transport",
+    "url": "https://community.chocolatey.org/api/v2/package/nsis.portable/3.13.0",
+    "packageFileName": "nsis.portable.3.13.0.nupkg",
+    "packageSha256": "C3597A5BBB40521BAD9E762B3175B8BCDE4768FB8A51376471A3D8293A2E86F2",
+    "embeddedArchivePath": "tools/nsis-3.13.zip"
+  },
+  "license": {
+    "summary": "zlib/libpng license for NSIS core, plug-ins and documentation; bundled compression modules retain their component licenses",
+    "officialUrl": "https://nsis.sourceforge.io/Docs/AppendixI.html",
+    "components": [
+      "zlib/libpng license (NSIS core and standard plug-ins)",
+      "zlib license (zlib compression module)",
+      "bzip2 license (bzip2 compression module)",
+      "Common Public License 1.0 with the NSIS special exception (LZMA compression module)"
+    ],
+    "thirdPartyPlugins": []
+  }
+}

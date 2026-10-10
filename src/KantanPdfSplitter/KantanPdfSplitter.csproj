@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF>
+    <ApplicationIcon>../../branding/icons/app.ico</ApplicationIcon><ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../KantanPdfSplitter.Core/KantanPdfSplitter.Core.csproj" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="KantanPdfSplitter.Tests" /></ItemGroup>
+  <ItemGroup>
+    <Resource Include="../../branding/nagoya-technology-logo.png" Link="Assets/logo.png" />
+    <Resource Include="../../branding/icons/app.ico" Link="Assets/app.ico" />
+    <Content Include="../../licenses/**/*" Link="licenses/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

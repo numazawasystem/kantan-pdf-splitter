@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/KantanPdfSplitter.Core/KantanPdfSplitter.Core.csproj" />
+    <Project Path="src/KantanPdfSplitter/KantanPdfSplitter.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/KantanPdfSplitter.Tests/KantanPdfSplitter.Tests.csproj" />
+  </Folder>
+</Solution>
