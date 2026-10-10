@@ -12,6 +12,39 @@ $desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDire
 $menu = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs, [Environment+SpecialFolderOption]::DoNotVerify)
 foreach ($folder in @($desktop,$menu)) { if (Test-Path "$folder/かんたんPDF分割.lnk") { throw 'A pre-existing shortcut is present.' } }
 $report = [Collections.Generic.List[string]]::new()
+if (-not ('PdfSplitterShortcutReader' -as [type])) {
+Add-Type @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+public static class PdfSplitterShortcutReader {
+  [ComImport, Guid("00021401-0000-0000-C000-000000000046")] private class ShellLink { }
+  [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  private interface IShellLinkW {
+    void GetPath([Out,MarshalAs(UnmanagedType.LPWStr)] StringBuilder path,int length,IntPtr data,uint flags);
+    void GetIDList(out IntPtr list); void SetIDList(IntPtr list);
+    void GetDescription([Out,MarshalAs(UnmanagedType.LPWStr)] StringBuilder text,int length);
+    void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string text);
+    void GetWorkingDirectory([Out,MarshalAs(UnmanagedType.LPWStr)] StringBuilder text,int length);
+    void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string text);
+    void GetArguments([Out,MarshalAs(UnmanagedType.LPWStr)] StringBuilder text,int length);
+    void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string text);
+    void GetHotkey(out short hotkey); void SetHotkey(short hotkey);
+    void GetShowCmd(out int command); void SetShowCmd(int command);
+    void GetIconLocation([Out,MarshalAs(UnmanagedType.LPWStr)] StringBuilder text,int length,out int index);
+  }
+  public static string[] Read(string path) {
+    object instance=new ShellLink();
+    try { ((IPersistFile)instance).Load(path,0); var link=(IShellLinkW)instance;
+      var target=new StringBuilder(32768);var icon=new StringBuilder(32768);int index;
+      link.GetPath(target,target.Capacity,IntPtr.Zero,0);link.GetIconLocation(icon,icon.Capacity,out index);
+      return new[]{target.ToString(),icon.ToString(),index.ToString()};
+    } finally { Marshal.FinalReleaseComObject(instance); }
+  }
+}
+'@
+}
 function Invoke-Setup([int]$Expected = 0) {
   $process = Start-Process -FilePath $Setup -ArgumentList '/S' -WindowStyle Hidden -PassThru
   if (-not $process.WaitForExit(120000)) { throw 'Installer timeout.' }
@@ -20,15 +53,20 @@ function Invoke-Setup([int]$Expected = 0) {
 function Assert-Install {
   $entry = Get-ItemProperty $key
   if ($entry.DisplayVersion -ne $version -or $entry.Publisher -ne '名古屋テクノロジー' -or $entry.InstallLocation -ne $install) { throw 'Installed Apps metadata mismatch.' }
-  $shell = New-Object -ComObject WScript.Shell
   foreach ($folder in @($desktop,$menu)) {
     $link = [IO.Path]::GetFullPath((Join-Path $folder 'かんたんPDF分割.lnk'))
     if (-not (Test-Path -LiteralPath $link)) {
       $found = @(Get-ChildItem $folder -Filter '*.lnk' -ErrorAction SilentlyContinue | ForEach-Object Name) -join ', '
       throw "Shortcut missing: $link; found=$found"
     }
-    $shortcut = $shell.CreateShortcut($link)
-    if ($shortcut.TargetPath -ne "$install\KantanPdfSplitter.exe" -or $shortcut.IconLocation -notlike '*KantanPdfSplitter.exe*') { throw "Shortcut target/icon mismatch: path=$link; target=$($shortcut.TargetPath); icon=$($shortcut.IconLocation); expected=$install\KantanPdfSplitter.exe" }
+    # Some Windows Shell/WScript combinations report an empty TargetPath for
+    # valid shortcuts. Load through the native IShellLinkW interface instead.
+    $shortcut = [PdfSplitterShortcutReader]::Read($link)
+    if ($shortcut[0] -ne "$install\KantanPdfSplitter.exe") { throw "Shortcut target mismatch: $($shortcut[0])" }
+    if ($shortcut[1] -ne '' -and $shortcut[1] -ne "$install\KantanPdfSplitter.exe") { throw "Shortcut icon location mismatch: $($shortcut[1])" }
+    if ($shortcut[2] -ne '0') { throw 'Shortcut icon index mismatch.' }
+    $label = if ($folder -eq $desktop) { 'desktop' } else { 'start-menu' }
+    & "$PSScriptRoot/Test-ShortcutIcon.ps1" -ShortcutPath $link -ReportPath "$root/artifacts/tests/$label-icon.json"
   }
   if ((Get-Item "$install/KantanPdfSplitter.exe").VersionInfo.ProductVersion -notlike "$version*") { throw 'Executable version mismatch.' }
 }
