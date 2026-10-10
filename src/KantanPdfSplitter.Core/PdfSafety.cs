@@ -12,7 +12,15 @@ internal static class PdfSafety
         if (doc.SecuritySettings.IsEncrypted || doc.SecurityHandler.Elements.ContainsKey("/Filter")) Reject("パスワードまたは利用制限が設定されています。保護のないPDFを選んでください。");
         if (doc.PageCount < 1) Reject("ページがありません。");
         var catalog = doc.Internals.Catalog;
-        if (catalog.Elements.ContainsKey("/AcroForm")) Reject("入力フォームが含まれています。入力欄の値や動作を安全に引き継げないため分割できません。");
+        if (catalog.Elements["/AcroForm"] is { } formItem)
+        {
+            if (PdfNavigation.Resolve(formItem) is not PdfDictionary form || PdfNavigation.Resolve(form.Elements["/Fields"]) is not PdfArray fields)
+                Reject("入力フォームの定義を読み取れません。安全に分割できません。");
+            else if (fields.Elements.Count > 0 || form.Elements.ContainsKey("/XFA") || form.Elements.GetInteger("/SigFlags") != 0)
+                Reject("入力フォームまたは署名用の欄が含まれています。入力欄の値や動作を安全に引き継げないため分割できません。");
+            // An explicit empty Fields array is a harmless producer placeholder,
+            // not an interactive form. It is not copied to the output.
+        }
         if (catalog.Elements.ContainsKey("/Perms")) Reject("電子署名または証明用の情報が含まれています。分割後に署名の有効性を維持できません。");
         foreach (var key in new[] { "/OCProperties", "/Collection", "/Requirements", "/Extensions", "/Threads" })
             if (catalog.Elements.ContainsKey(key)) Reject($"対応していない文書設定（{key}）が含まれています。");
@@ -26,6 +34,8 @@ internal static class PdfSafety
             if (unknown != null) Reject($"{index + 1}ページに対応していないページ設定（{unknown}）があります。");
             if (page.Width.Point <= 0 || page.Height.Point <= 0 || page.Rotate % 90 != 0) Reject($"{index + 1}ページのサイズまたは向きが不正です。");
             if (page.Elements.ContainsKey("/UserUnit") && (page.Elements.GetReal("/UserUnit") <= 0 || page.Elements.GetReal("/UserUnit") > 75000)) Reject($"{index + 1}ページのサイズ倍率が不正です。");
+            if (page.Elements["/Group"] is { } group && PdfNavigation.Resolve(group) is not PdfDictionary) Reject($"{index + 1}ページの透明度設定を読み取れません。");
+            if (page.Elements["/Annots"] is { } annots && PdfNavigation.Resolve(annots) is not PdfArray) Reject($"{index + 1}ページの注釈情報を読み取れません。");
             var annotations = page.Elements.GetArray("/Annots");
             if (annotations == null) continue;
             foreach (var item in annotations.Elements)

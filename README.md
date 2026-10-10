@@ -52,4 +52,3 @@ dotnet test KantanPdfSplitter.slnx -c Release --no-build
 参考：`numazawasystem/omoide-dvd-writer` commit `3549583a5948c490485a095ca81292e55cda677b`。参考リポジトリは変更していません。正式ロゴは2172×724 RGBA、SHA-256 `B8BB696071B466374CC95C8427AD563C5D48E36C14A1164D7CBB2B981D487041`。原本をバイト単位で再利用。UI・Splashは同じライトテーマ、Splashは非同期で約1.1秒。専用アイコンは独自の図形描画でPDF書類・分離したページと矢印を表現し、9サイズをICOに収録します。
 
 ソースコードの利用条件は `LICENSE`、会社ロゴの権利はブランド所有者に帰属します。使用ライブラリの条件は `THIRD_PARTY_NOTICES.md` と `licenses/` に同梱。
-

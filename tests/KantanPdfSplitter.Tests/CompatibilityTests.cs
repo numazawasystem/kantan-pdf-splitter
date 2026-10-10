@@ -144,5 +144,22 @@ public sealed class CompatibilityTests : IDisposable
         var path = Make(d => d.Pages[0].Elements.SetReal("/UserUnit", -1));
         var error = await Assert.ThrowsAsync<PdfSplitException>(() => new PdfSplitService().InspectAsync(path)); Assert.Contains("サイズ倍率", error.Message);
     }
+    [Fact] public async Task EmptyFormPlaceholderDoesNotRejectOrdinaryPdf()
+    {
+        var path = Make(d => { var form = new PdfDictionary(d); form.Elements["/Fields"] = new PdfArray(d); d.Internals.Catalog.Elements["/AcroForm"] = form; });
+        var service = new PdfSplitService(); var info = await service.InspectAsync(path);
+        Assert.Equal(3, (await service.SplitAsync(info, SplitPlan.Create(info, true, ""), Output)).Count);
+    }
+    [Fact] public async Task ActualInputFieldsRemainRejected()
+    {
+        var path = Make(d => { var field = new PdfDictionary(d); field.Elements.SetName("/FT", "/Tx"); field.Elements.SetString("/T", "name"); var fields = new PdfArray(d); fields.Elements.Add(field); var form = new PdfDictionary(d); form.Elements["/Fields"] = fields; d.Internals.Catalog.Elements["/AcroForm"] = form; });
+        var error = await Assert.ThrowsAsync<PdfSplitException>(() => new PdfSplitService().InspectAsync(path)); Assert.Contains("入力フォーム", error.Message);
+    }
+    [Theory] [InlineData("/Group", "透明度")] [InlineData("/Annots", "注釈")]
+    public async Task InvalidPageInformationNamesCause(string key, string cause)
+    {
+        var path = Make(d => d.Pages[0].Elements[key] = new PdfInteger(123));
+        var error = await Assert.ThrowsAsync<PdfSplitException>(() => new PdfSplitService().InspectAsync(path)); Assert.Contains(cause, error.Message);
+    }
     public void Dispose() { if (Directory.Exists(_root)) Directory.Delete(_root, true); }
 }

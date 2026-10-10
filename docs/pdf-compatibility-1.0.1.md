@@ -23,7 +23,7 @@ v1.0.0 rejected any `/Annots` (including ordinary links), `/Outlines`, `/Names`,
 
 The in-memory source page's annotation entry is detached only while PDFsharp imports its content, then restored in `finally`. Original file bytes are read-only throughout. This avoids following original navigation references into unselected pages before a complete new page map exists. Links and bookmark trees are rebuilt against that map. Unknown/dangerous features produce a specific rejection cause; the UI shows the rejected filename with a reading-error state, not a normal unselected state.
 
-Safety gates remain for encryption including empty opening passwords, signatures, input forms/Widgets, attachments, scripts/automatic actions, file-launch/remote-document actions, multimedia and unsupported layers/page settings. Page data that cannot be safely copied is rejected, rather than silently changed.
+Safety gates remain for encryption including empty opening passwords, signatures, input forms/Widgets, attachments, scripts/automatic actions, file-launch/remote-document actions, multimedia and unsupported layers/page settings. An explicitly empty AcroForm Fields array with no XFA/signature flags is treated as a harmless producer placeholder, while actual fields and incomplete form definitions are rejected. Page data that cannot be safely copied is rejected, rather than silently changed.
 
 ## Library comparison
 
