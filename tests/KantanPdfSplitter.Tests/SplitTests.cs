@@ -87,7 +87,13 @@ public sealed class SplitTests : IDisposable
         var xObjects = b.Resources.Elements.GetDictionary("/XObject");
         Assert.NotNull(xObjects);
         Assert.Contains(xObjects.Elements.Values, item => item is PdfSharp.Pdf.Advanced.PdfReference r && r.Value is PdfDictionary d && d.Elements.GetName("/Subtype") == "/Image");
-        Assert.NotNull(b.Resources.Elements.GetDictionary("/Font"));
+        var sourceImage = a.Resources.Elements.GetDictionary("/XObject")!.Elements.GetDictionary("/Im1")!;
+        var outputImage = xObjects.Elements.GetDictionary("/Im1")!;
+        Assert.Equal(sourceImage.Stream.UnfilteredValue, outputImage.Stream.UnfilteredValue);
+        Assert.Equal(sourceImage.Elements.GetInteger("/Width"), outputImage.Elements.GetInteger("/Width"));
+        Assert.Equal(sourceImage.Elements.GetInteger("/Height"), outputImage.Elements.GetInteger("/Height"));
+        Assert.Equal(a.Resources.Elements.GetDictionary("/Font")!.Elements.GetDictionary("/F1")!.Elements.GetName("/BaseFont"),
+            b.Resources.Elements.GetDictionary("/Font")!.Elements.GetDictionary("/F1")!.Elements.GetName("/BaseFont"));
     }
 
     [Theory]
@@ -167,6 +173,16 @@ public sealed class SplitTests : IDisposable
         var path = Make(2, d => { d.SecuritySettings.OwnerPassword = "owner"; d.SecuritySettings.PermitExtractContent = false; if (openPassword) d.SecuritySettings.UserPassword = "user"; });
         await Assert.ThrowsAsync<PdfSplitException>(() => new PdfSplitService().InspectAsync(path));
     }
+    [Theory]
+    [InlineData(PdfSharp.Pdf.Security.PdfDefaultEncryption.V1)]
+    [InlineData(PdfSharp.Pdf.Security.PdfDefaultEncryption.V2With128Bits)]
+    [InlineData(PdfSharp.Pdf.Security.PdfDefaultEncryption.V4UsingAES)]
+    [InlineData(PdfSharp.Pdf.Security.PdfDefaultEncryption.V5)]
+    public async Task OwnerOnlyEncryptionRevisionsRejected(PdfSharp.Pdf.Security.PdfDefaultEncryption method)
+    {
+        var path = Make(1, d => { d.SecuritySettings.OwnerPassword = "owner"; d.SecurityHandler.SetEncryption(method); });
+        await Assert.ThrowsAsync<PdfSplitException>(() => new PdfSplitService().InspectAsync(path));
+    }
     [Theory] [InlineData("/AcroForm")] [InlineData("/Perms")] [InlineData("/Names")] [InlineData("/Outlines")] [InlineData("/OCProperties")] [InlineData("/StructTreeRoot")]
     public async Task SpecialCatalogRejected(string key)
     {
@@ -218,6 +234,7 @@ public sealed class SplitTests : IDisposable
             try
             {
                 var app = new App(); app.InitializeComponent();
+                SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
                 var window = new MainWindow(); window.Show();
                 var split = (Button)window.FindName("SplitButton"); Assert.False(split.IsEnabled);
                 var task = window.LoadPdfAsync(Make(2));

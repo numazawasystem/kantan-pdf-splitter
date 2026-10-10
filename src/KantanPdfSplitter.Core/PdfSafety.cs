@@ -13,7 +13,11 @@ internal static class PdfSafety
 
     public static void Validate(PdfDocument doc, CancellationToken token)
     {
-        if (doc.SecuritySettings.IsEncrypted) throw new PdfSplitException("パスワードや利用制限が設定されたPDFには対応していません。保護のないPDFを選んでください。");
+        // PdfReader resets active encryption after decryption, so IsEncrypted
+        // alone misses owner-only protection. The parsed original handler keeps
+        // its /Filter entry, including when the opening password is empty.
+        if (doc.SecuritySettings.IsEncrypted || doc.SecurityHandler.Elements.ContainsKey("/Filter"))
+            throw new PdfSplitException("パスワードや利用制限が設定されたPDFには対応していません。保護のないPDFを選んでください。");
         if (doc.PageCount < 1) throw new PdfSplitException("ページのないPDFは分割できません。");
         if (doc.Internals.Catalog.Elements.Keys.Any(UnsupportedCatalogKeys.Contains)) throw new PdfSplitException(Unsupported);
         foreach (var page in doc.Pages)

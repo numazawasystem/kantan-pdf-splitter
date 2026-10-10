@@ -33,7 +33,7 @@ jobs:
           dotnet test KantanPdfSplitter.slnx -c Release --no-build --logger 'trx;LogFileName=tests.trx' --results-directory artifacts/tests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           [xml]$results = Get-Content artifacts/tests/tests.trx
-          if ([int]$results.TestRun.ResultSummary.Counters.total -lt 49 -or [int]$results.TestRun.ResultSummary.Counters.failed -ne 0) { throw 'Tests did not actually execute successfully.' }
+          if ([int]$results.TestRun.ResultSummary.Counters.total -lt 53 -or [int]$results.TestRun.ResultSummary.Counters.failed -ne 0) { throw 'Tests did not actually execute successfully.' }
       - name: Check runtime dependency advisories
         run: |
           dotnet list src/KantanPdfSplitter/KantanPdfSplitter.csproj package --vulnerable --include-transitive --format json > artifacts/dependency-audit.json
