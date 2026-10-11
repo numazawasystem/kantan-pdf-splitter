@@ -8,6 +8,11 @@ public sealed record PdfInfo(string Path, int PageCount, string Sha256)
     public PdfCompatibility Compatibility { get; init; } = new();
 }
 public sealed record PdfPageLink(int SourcePage, int TargetPage);
+public enum PdfNoticeSeverity { Information, Important }
+public sealed record PdfNotice(string Code, PdfNoticeSeverity Severity, string Summary, string Details)
+{
+    public bool RequiresConfirmation => Severity == PdfNoticeSeverity.Important;
+}
 public sealed record PdfCompatibility
 {
     public bool HasTags { get; init; }
@@ -15,18 +20,31 @@ public sealed record PdfCompatibility
     public bool HasNamedDestinations { get; init; }
     public bool HasUnresolvedBookmarks { get; init; }
     public bool HasInitialView { get; init; }
+    public IReadOnlyList<string> InitialViewChanges { get; init; } = [];
+    public IReadOnlyList<int> BookmarkTargetPages { get; init; } = [];
+    public IReadOnlyList<int> NamedDestinationPages { get; init; } = [];
     public IReadOnlyList<PdfPageLink> PageLinks { get; init; } = [];
-    public IReadOnlyList<string> Warnings(IReadOnlyList<PageRange> ranges)
+    public IReadOnlyList<PdfNotice> Notices(IReadOnlyList<PageRange> ranges)
     {
-        var warnings = new List<string>();
-        if (HasTags) warnings.Add("読み上げ用の構造情報は引き継がれません。文字・画像の見た目と文字検索は維持されます。");
-        if (ranges.Count > 1 && (HasBookmarks || HasNamedDestinations)) warnings.Add("しおりと移動先の名前は、各出力PDFに含まれるページのものを引き継ぎます。それ以外の移動先は引き継がれません。");
+        var notices = new List<PdfNotice>();
+        if (HasTags) notices.Add(new("reading-structure", PdfNoticeSeverity.Important,
+            "読み上げ用の構造情報は引き継がれません。",
+            "読み上げ順序や見出しなどの構造情報が失われます。文字・画像の見た目と文字検索は維持されます。読み上げに使う場合は、元のPDFも保管してください。"));
+        if (BookmarkTargetPages.Concat(NamedDestinationPages).Any(page => page == 0 || ranges.Any(r => page < r.First || page > r.Last)))
+            notices.Add(new("navigation", PdfNoticeSeverity.Information,
+                "しおり・移動先は各ファイルのページに合わせて整理されます。",
+                "しおりと移動先の名前は、各出力PDFに含まれるページのものを引き継ぎます。それ以外の移動先は省略します。子のしおりが残る見出しは維持します。"));
         if (PageLinks.Any(link => link.TargetPage == 0 || !ranges.Any(r => link.SourcePage >= r.First && link.SourcePage <= r.Last && link.TargetPage >= r.First && link.TargetPage <= r.Last)))
-            warnings.Add("別の出力PDFへ移動するページ内リンクや、移動先を読み取れないリンクは、クリックして移動できなくなります。リンクの見た目は維持します。");
-        if (HasUnresolvedBookmarks) warnings.Add("移動先を読み取れないしおりは、引き継げないことがあります。");
-        if (HasInitialView) warnings.Add("PDFを開いたときの移動先・表示設定は引き継がれません。");
-        return warnings.AsReadOnly();
+            notices.Add(new("page-links", PdfNoticeSeverity.Information,
+                "一部のページ移動リンクが使えなくなります。",
+                "別の出力PDFへ移動するリンクや、移動先を読み取れないリンクは、クリックして移動できなくなります。リンクの見た目は維持します。同じ出力内のページへのリンクとWeb・メールのリンクは維持します。"));
+        if (HasUnresolvedBookmarks) notices.Add(new("unresolved-bookmarks", PdfNoticeSeverity.Information,
+            "移動先が不明なしおりは引き継げない場合があります。", "移動先を読み取れないしおりは省略します。子のしおりが残る場合は、移動できない見出しとして維持します。"));
+        if (HasInitialView) notices.Add(new("initial-view", PdfNoticeSeverity.Information,
+            string.Join("・", InitialViewChanges) + "は引き継がれません。", string.Join("、", InitialViewChanges) + "は各出力PDFの標準設定になります。ページの内容・サイズ・向きは維持します。"));
+        return notices.AsReadOnly();
     }
+    public IReadOnlyList<string> Warnings(IReadOnlyList<PageRange> ranges) => Notices(ranges).Select(n => n.Details).ToArray();
 }
 public sealed record PageRange(int First, int Last, string FileName)
 {

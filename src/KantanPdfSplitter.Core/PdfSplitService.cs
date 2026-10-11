@@ -34,7 +34,7 @@ public sealed class PdfSplitService
         using var doc = Read(source);
         var compatibility = PdfSafety.Validate(doc, token);
         ValidatePlan(info, ranges, doc.PageCount);
-        if (compatibility.Warnings(ranges).Count > 0 && !acknowledgeCompatibilityWarnings)
+        if (compatibility.Notices(ranges).Any(n => n.RequiresConfirmation) && !acknowledgeCompatibilityWarnings)
             throw new PdfSplitException("分割に伴う変更内容を確認してから実行してください。");
         var targets = ranges.Select(r => Path.Combine(destination, r.FileName)).ToArray();
         if (targets.Distinct(StringComparer.OrdinalIgnoreCase).Count() != targets.Length)

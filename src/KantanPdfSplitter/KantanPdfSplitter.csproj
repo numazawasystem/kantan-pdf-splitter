@@ -12,5 +12,6 @@
     <Content Include="../../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../README.md" Link="README.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../docs/pdf-compatibility-1.0.1.md" Link="docs/pdf-compatibility-1.0.1.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../docs/notice-ux-1.0.2.md" Link="docs/notice-ux-1.0.2.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

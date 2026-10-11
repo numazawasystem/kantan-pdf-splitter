@@ -30,9 +30,13 @@
             </Border>
             <Border x:Name="CompatibilityPanel" Visibility="Collapsed" Background="#FFF7E5" BorderBrush="#B58C36" BorderThickness="1" CornerRadius="5" Padding="12" Margin="0,12,0,0">
               <StackPanel>
-                <TextBlock Text="分割前にご確認ください" FontWeight="SemiBold"/>
-                <TextBlock x:Name="CompatibilityText" TextWrapping="Wrap" Margin="0,6,0,8" Foreground="#6D521C"/>
-                <CheckBox x:Name="CompatibilityAcknowledgment" Content="上記の変更内容を確認しました" Checked="WarningsAcknowledged" Unchecked="WarningsAcknowledged" AutomationProperties.Name="分割に伴う変更内容の確認"/>
+                <TextBlock x:Name="CompatibilityText" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#6D521C" AutomationProperties.LiveSetting="Polite"/>
+                <CheckBox x:Name="CompatibilityAcknowledgment" Content="読み上げ情報の変更を確認しました" Visibility="Collapsed" Margin="0,8,0,0" Checked="WarningsAcknowledged" Unchecked="WarningsAcknowledged" AutomationProperties.Name="読み上げ情報の変更の確認"/>
+                <Expander x:Name="CompatibilityDetails" Header="詳しい説明" IsExpanded="False" Margin="0,6,0,0" AutomationProperties.Name="分割に伴う変更の詳しい説明">
+                  <ScrollViewer MaxHeight="145" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <TextBlock x:Name="CompatibilityDetailsText" TextWrapping="Wrap" Margin="0,6,8,0" Foreground="#6D521C"/>
+                  </ScrollViewer>
+                </Expander>
               </StackPanel>
             </Border>
             <TextBlock Text="保存先フォルダー" Style="{StaticResource Section}" Margin="0,12,0,6"/>

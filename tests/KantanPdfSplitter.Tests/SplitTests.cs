@@ -286,16 +286,51 @@ public sealed class SplitTests : IDisposable
                 while (!compatibleTask.IsCompleted) Pump(); compatibleTask.GetAwaiter().GetResult();
                 Assert.Equal(Visibility.Visible, ((Border)window.FindName("CompatibilityPanel")).Visibility);
                 Assert.Contains("読み上げ", ((TextBlock)window.FindName("CompatibilityText")).Text); Assert.False(split.IsEnabled);
-                var acknowledgment = (CheckBox)window.FindName("CompatibilityAcknowledgment"); acknowledgment.IsChecked = true; Assert.True(split.IsEnabled);
+                var details = (Expander)window.FindName("CompatibilityDetails"); Assert.False(details.IsExpanded);
+                var acknowledgment = (CheckBox)window.FindName("CompatibilityAcknowledgment");
+                Assert.Equal(Visibility.Visible, acknowledgment.Visibility);
+                Assert.DoesNotContain("しおり", ((TextBlock)window.FindName("CompatibilityText")).Text);
+                Assert.Contains("しおり", ((TextBlock)window.FindName("CompatibilityDetailsText")).Text);
+                acknowledgment.IsChecked = true; Assert.True(split.IsEnabled);
                 ((RadioButton)window.FindName("AtPages")).IsChecked = true; Assert.False(split.IsEnabled); Assert.False(acknowledgment.IsChecked);
                 ((TextBox)window.FindName("CutsBox")).Text = "2"; acknowledgment.IsChecked = true; Assert.True(split.IsEnabled);
                 var uiEvidence = Environment.GetEnvironmentVariable("KANTAN_UI_EVIDENCE");
-                if (!string.IsNullOrEmpty(uiEvidence))
+                void Capture(string name)
                 {
+                    if (string.IsNullOrEmpty(uiEvidence)) return;
                     window.Width = 900; window.Height = 720; Pump(); window.UpdateLayout();
                     ((ScrollViewer)window.FindName("InputScroll")).ScrollToBottom(); Pump(); window.UpdateLayout();
                     var visual = (FrameworkElement)window.Content; var image = new RenderTargetBitmap((int)visual.ActualWidth, (int)visual.ActualHeight, 96, 96, PixelFormats.Pbgra32); image.Render(visual);
-                    var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(image)); using var file = File.Create(Path.Combine(uiEvidence, "ui-compatibility.png")); png.Save(file);
+                    var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(image)); using var file = File.Create(Path.Combine(uiEvidence, name + ".png")); png.Save(file);
+                }
+                acknowledgment.IsChecked = false; Capture("ui-important-collapsed");
+                details.IsExpanded = true; Pump(); window.UpdateLayout(); Assert.False(split.IsEnabled);
+                Capture("ui-important-expanded");
+                // Expanding details does not count as acknowledging important information.
+                acknowledgment.IsChecked = true; Assert.True(split.IsEnabled);
+                var minorPath = Make(3, d => d.Pages[0].AddDocumentLink(new PdfRectangle(new XRect(0, 0, 30, 30)), 3), "minor-links.pdf");
+                var minorTask = window.LoadPdfAsync(minorPath); while (!minorTask.IsCompleted) Pump(); minorTask.GetAwaiter().GetResult();
+                Assert.True(split.IsEnabled); Assert.False(acknowledgment.IsChecked);
+                Assert.Equal(Visibility.Collapsed, acknowledgment.Visibility); Assert.False(details.IsExpanded);
+                Assert.Contains("リンク", ((TextBlock)window.FindName("CompatibilityText")).Text);
+                Capture("ui-minor-collapsed");
+                details.IsExpanded = true; Pump(); Assert.True(split.IsEnabled); Capture("ui-minor-expanded");
+                foreach (var scale in new[] { 1.0, 1.25, 1.5 })
+                {
+                    window.Width = 1366 / scale - 80; window.Height = 768 / scale - 60; Pump(); window.UpdateLayout();
+                    var visual = (FrameworkElement)window.Content;
+                    var position = split.TransformToAncestor(visual).Transform(new Point());
+                    Assert.True(position.Y + split.ActualHeight <= visual.ActualHeight); Assert.True(split.IsEnabled);
+                    Assert.True(((Border)window.FindName("CompatibilityPanel")).ActualHeight < 280);
+                }
+                ((TextBox)window.FindName("CutsBox")).Text = "3";
+                Assert.Equal(Visibility.Collapsed, ((Border)window.FindName("CompatibilityPanel")).Visibility); Assert.True(split.IsEnabled);
+                ((TextBox)window.FindName("CutsBox")).Text = "2";
+                Assert.True(split.IsEnabled); Assert.Equal(Visibility.Collapsed, acknowledgment.Visibility);
+                if (!string.IsNullOrEmpty(uiEvidence))
+                {
+                    File.Copy(minorPath, Path.Combine(uiEvidence, "qa-minor.pdf"), true);
+                    File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "office-like.pdf"), Path.Combine(uiEvidence, "qa-important.pdf"), true);
                 }
                 window.Close(); app.Shutdown();
             }

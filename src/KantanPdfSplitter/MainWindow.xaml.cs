@@ -14,7 +14,8 @@ public partial class MainWindow : Window
     private IReadOnlyList<PageRange>? _plan;
     private bool _busy;
     private string? _loadFailure;
-    private IReadOnlyList<string> _warnings = [];
+    private IReadOnlyList<PdfNotice> _notices = [];
+    private bool NeedsAcknowledgment => _notices.Any(n => n.RequiresConfirmation);
     private string? _completedFolder;
     public MainWindow() => InitializeComponent();
 
@@ -41,7 +42,7 @@ public partial class MainWindow : Window
     internal async Task LoadPdfAsync(string path)
     {
         if (_busy) return;
-        _info = null; _plan = null; _loadFailure = null; _warnings = [];
+        _info = null; _plan = null; _loadFailure = null; _notices = [];
         CompatibilityPanel.Visibility = Visibility.Collapsed; CompatibilityAcknowledgment.IsChecked = false;
         PreviewList.ItemsSource = null; PreviewTitle.Text = "分割結果のプレビュー"; FileSummary.Text = "PDFを確認しています…";
         SetBusy(true); ClearCompletion(); SetStatus("PDFを確認しています…");
@@ -66,7 +67,8 @@ public partial class MainWindow : Window
     {
         CutsPanel.Visibility = AtPages.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         _plan = null;
-        _warnings = []; CompatibilityAcknowledgment.IsChecked = false;
+        _notices = []; CompatibilityAcknowledgment.IsChecked = false;
+        CompatibilityAcknowledgment.Visibility = Visibility.Collapsed; CompatibilityDetails.IsExpanded = false;
         CompatibilityPanel.Visibility = Visibility.Collapsed;
         PreviewList.ItemsSource = null;
         if (_info != null)
@@ -75,11 +77,16 @@ public partial class MainWindow : Window
             {
                 _plan = SplitPlan.Create(_info, EveryPage.IsChecked == true, CutsBox.Text);
                 PreviewList.ItemsSource = _plan;
-                _warnings = _info.Compatibility.Warnings(_plan);
-                CompatibilityText.Text = string.Join("\n\n", _warnings);
-                CompatibilityPanel.Visibility = _warnings.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                _notices = _info.Compatibility.Notices(_plan);
+                var important = _notices.Where(n => n.RequiresConfirmation).ToArray();
+                CompatibilityText.Text = important.Length > 0 ? string.Join("\n", important.Select(n => n.Summary)) : string.Join("\n", _notices.Select(n => n.Summary));
+                CompatibilityDetailsText.Text = string.Join("\n\n", _notices.Select(n => n.Summary + "\n" + n.Details));
+                var otherCount = _notices.Count - important.Length;
+                CompatibilityDetails.Header = important.Length > 0 && otherCount > 0 ? $"詳しい説明（ほか{otherCount}件の変更）" : "詳しい説明";
+                CompatibilityAcknowledgment.Visibility = NeedsAcknowledgment ? Visibility.Visible : Visibility.Collapsed;
+                CompatibilityPanel.Visibility = _notices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
                 PreviewTitle.Text = $"分割結果のプレビュー  ・  {_plan.Count}ファイル";
-                SetStatus(_warnings.Count > 0 ? "分割に伴う変更があります。画面の確認欄をご確認ください。" : "元のPDFは変更されません。");
+                SetStatus(NeedsAcknowledgment ? "読み上げ情報の変更を確認してください。元のPDFは変更されません。" : "元のPDFは変更されません。");
             }
             catch (PdfSplitException error) { PreviewTitle.Text = "分割結果のプレビュー"; SetStatus(error.Message, true); }
         }
@@ -95,7 +102,7 @@ public partial class MainWindow : Window
     }
     private async void Split_Click(object sender, RoutedEventArgs e)
     {
-        if (_busy || _info == null || _plan == null || string.IsNullOrWhiteSpace(DestinationBox.Text) || (_warnings.Count > 0 && CompatibilityAcknowledgment.IsChecked != true)) return;
+        if (_busy || _info == null || _plan == null || string.IsNullOrWhiteSpace(DestinationBox.Text) || (NeedsAcknowledgment && CompatibilityAcknowledgment.IsChecked != true)) return;
         var folder = DestinationBox.Text;
         SetBusy(true); ClearCompletion(); SetStatus("PDFを分割しています…");
         Progress.IsIndeterminate = false; Progress.Maximum = _plan.Count; Progress.Value = 0;
@@ -120,7 +127,7 @@ public partial class MainWindow : Window
         UpdateRunState();
     }
     private void WarningsAcknowledged(object sender, RoutedEventArgs e) { if (IsInitialized) UpdateRunState(); }
-    private void UpdateRunState() => SplitButton.IsEnabled = !_busy && _info != null && _plan?.Count > 0 && !string.IsNullOrWhiteSpace(DestinationBox.Text) && (_warnings.Count == 0 || CompatibilityAcknowledgment.IsChecked == true);
+    private void UpdateRunState() => SplitButton.IsEnabled = !_busy && _info != null && _plan?.Count > 0 && !string.IsNullOrWhiteSpace(DestinationBox.Text) && (!NeedsAcknowledgment || CompatibilityAcknowledgment.IsChecked == true);
     private void ClearCompletion() { _completedFolder = null; OpenFolderButton.Visibility = Visibility.Collapsed; }
     private void SetStatus(string message, bool error = false)
     {
