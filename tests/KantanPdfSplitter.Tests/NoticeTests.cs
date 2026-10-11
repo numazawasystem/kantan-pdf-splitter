@@ -86,7 +86,16 @@ public sealed class NoticeTests : IDisposable
         var info = await new PdfSplitService().InspectAsync(Make(d =>
         {
             if (kind == "named") { var dests = new PdfDictionary(d); dests.Elements["/missing"] = new PdfString("undefined"); d.Internals.Catalog.Elements["/Dests"] = dests; }
-            else if (kind == "bookmark") { var outline = d.Outlines.Add("Missing", d.Pages[0], true); outline.Elements["/Dest"] = new PdfString("undefined"); }
+            else if (kind == "bookmark")
+            {
+                // Use a raw outline: PdfOutline.PrepareForSave overwrites /Dest with
+                // its DestinationPage property, which would repair this test input.
+                var root = new PdfDictionary(d); d.Internals.AddObject(root);
+                var outline = new PdfDictionary(d); d.Internals.AddObject(outline);
+                outline.Elements.SetString("/Title", "Missing"); outline.Elements["/Dest"] = new PdfString("undefined");
+                outline.Elements.SetReference("/Parent", root); root.Elements.SetReference("/First", outline); root.Elements.SetReference("/Last", outline);
+                d.Internals.Catalog.Elements.SetReference("/Outlines", root);
+            }
             else { var a = new PdfDictionary(d); a.Elements.SetName("/Subtype", "/Link"); a.Elements["/Rect"] = new PdfRectangle(new XRect(0, 0, 20, 20)); a.Elements["/Dest"] = new PdfString("undefined"); var annots = new PdfArray(d); annots.Elements.Add(a); d.Pages[0].Elements["/Annots"] = annots; }
         }));
         var notice = Assert.Single(Notices(info, "3")); Assert.False(notice.RequiresConfirmation);
